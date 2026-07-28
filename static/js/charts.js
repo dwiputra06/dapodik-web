@@ -1,20 +1,19 @@
-let barChartInstance = null;
-let doughnutChartInstance = null;
-
 function renderBarChart(containerId, labels, values) {
     const canvas = document.getElementById(containerId);
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    if (barChartInstance) {
-        barChartInstance.destroy();
+    // Destroy chart lama jika sudah ada di canvas ini
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+        existingChart.destroy();
     }
 
+    const ctx = canvas.getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 280);
     gradient.addColorStop(0, '#3b82f6');
     gradient.addColorStop(1, '#6366f1');
 
-    barChartInstance = new Chart(ctx, {
+    new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
@@ -24,8 +23,8 @@ function renderBarChart(containerId, labels, values) {
                 backgroundColor: gradient,
                 borderRadius: 8,
                 borderSkipped: false,
-                maxBarThickness: 38,       // Bikin batang gemuk & pas
-                categoryPercentage: 0.65,  // Merapatkan jarak antar kategori (hilangin sosial distancing)
+                maxBarThickness: 38,
+                categoryPercentage: 0.65,
                 barPercentage: 0.85
             }]
         },
@@ -76,15 +75,17 @@ function renderDoughnutChart(containerId, legendId, labels, values) {
     const canvas = document.getElementById(containerId);
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    if (doughnutChartInstance) {
-        doughnutChartInstance.destroy();
+    // Destroy chart lama jika sudah ada di canvas ini
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+        existingChart.destroy();
     }
 
+    const ctx = canvas.getContext('2d');
     const palette = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#64748b', '#14b8a6', '#a855f7'];
     const backgroundColors = labels.map((_, idx) => palette[idx % palette.length]);
 
-    doughnutChartInstance = new Chart(ctx, {
+    new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: labels,
@@ -123,7 +124,7 @@ function renderDoughnutChart(containerId, legendId, labels, values) {
                     <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${palette[idx % palette.length]}"></span>
                     <span class="text-[11px] font-medium text-slate-600 truncate">${lbl}</span>
                 </div>
-                <span class="text-[11px] font-bold text-slate-800 ml-1">${values[idx].toLocaleString('id-ID')}</span>
+                <span class="text-[11px] font-bold text-slate-800 ml-1">${(values[idx] || 0).toLocaleString('id-ID')}</span>
             </div>
         `).join('');
     }
