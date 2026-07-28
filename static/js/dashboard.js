@@ -1,6 +1,31 @@
 // ==========================================
-// 1. FETCH & HELPERS FLEKSIBEL (ANTI-GAGAL)
+// 1. HELPER & KONSTANTA (ANTI-REDEKLARASI)
 // ==========================================
+
+// Menggunakan var & fallback window untuk mencegah 'Identifier has already been declared'
+var JENJANG_COLORS = window.JENJANG_COLORS || {
+    'SD': '#ea580c',      // Orange
+    'SMP': '#2563eb',     // Blue
+    'SMA': '#64748b',     // Slate
+    'SMK': '#9333ea',     // Purple
+    'PAUD': '#38bdf8',    // Sky
+    'TK': '#06b6d4',      // Cyan
+    'KB': '#14b8a6',      // Teal
+    'PKBM': '#f59e0b',    // Amber
+    'SLB': '#1e293b',     // Dark Slate
+    'SPS': '#10b981'      // Emerald
+};
+
+// Helper Debounce untuk Input Pencarian
+function debounce(func, delay = 300) {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), delay);
+    };
+}
+
+// Fetch API
 async function fetchDapodikData() {
     const response = await fetch('/api/dapodik');
     if (!response.ok) {
@@ -118,29 +143,16 @@ function removeDuplicateSchools(dataList) {
     });
 }
 
-const JENJANG_COLORS = {
-    'SD': '#ea580c',     
-    'SMP': '#2563eb',    
-    'SMA': '#64748b',    
-    'SMK': '#9333ea',    
-    'PAUD': '#38bdf8',   
-    'TK': '#06b6d4',     
-    'KB': '#14b8a6',     
-    'PKBM': '#f59e0b',   
-    'SLB': '#1e293b',    
-    'SPS': '#10b981'     
-};
-
 // ==========================================
 // 2. STATE & INITIALIZATION
 // ==========================================
-let rawData = [];
-let filteredData = [];
-let currentChartTab = 'wilayah';
-let mainChartInstance = null;
+var rawData = [];
+var filteredData = [];
+var currentChartTab = 'wilayah';
+var mainChartInstance = null;
 
-let currentPage = 1;
-const rowsPerPage = 10;
+var currentPage = 1;
+var rowsPerPage = 10;
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (window.lucide) lucide.createIcons();
@@ -169,6 +181,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         updateStatusBadge(true, rawData.length);
         
+        // 🔒 Update Ringkasan Kartu Atas sekali saja memakai RAW DATA (Statis Global)
+        updateCards();
+
         populateFilters();
         applyFilters(); 
     } catch (err) {
@@ -182,7 +197,9 @@ function setupEventListeners() {
     document.getElementById('filter-bp')?.addEventListener('change', applyFilters);
     document.getElementById('filter-status')?.addEventListener('change', applyFilters);
     document.getElementById('filter-metric')?.addEventListener('change', applyFilters);
-    document.getElementById('search-input')?.addEventListener('input', applyFilters);
+    
+    // Menggunakan debounce untuk input search
+    document.getElementById('search-input')?.addEventListener('input', debounce(applyFilters, 300));
 
     document.getElementById('tab-btn-wilayah')?.addEventListener('click', () => switchChartTab('wilayah'));
     document.getElementById('tab-btn-jenjang')?.addEventListener('click', () => switchChartTab('jenjang'));
@@ -252,7 +269,7 @@ function applyFilters() {
     const selectedMetric = (document.getElementById('filter-metric')?.value || 'DEFAULT').toUpperCase();
     const searchQuery = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
 
-    // 1. FILTER KHUSUS TABEL & CARDS SAJA
+    // 1. FILTER KHUSUS TABEL SAJA
     filteredData = rawData.filter(item => {
         const itemKab = (item.CleanKabupaten || '').toUpperCase();
         const itemBP = getBP(item).toUpperCase();
@@ -285,21 +302,21 @@ function applyFilters() {
 
     currentPage = 1;
 
-    updateCards();
     renderTable();
     updateCharts();
 }
 
+// 🔒 LOGIKA KARTU RINGKASAN: Menggunakan rawData agar nilainya STATIS & GLOBAL
 function updateCards() {
     const elSekolah = document.getElementById('card-sekolah');
     const elSiswa = document.getElementById('card-siswa');
     const elGuru = document.getElementById('card-guru');
     const elRombel = document.getElementById('card-rombel');
 
-    if (elSekolah) elSekolah.innerText = filteredData.length.toLocaleString('id-ID');
-    if (elSiswa) elSiswa.innerText = filteredData.reduce((a, b) => a + getSiswaCount(b), 0).toLocaleString('id-ID');
-    if (elGuru) elGuru.innerText = filteredData.reduce((a, b) => a + getGuruCount(b), 0).toLocaleString('id-ID');
-    if (elRombel) elRombel.innerText = filteredData.reduce((a, b) => a + getRombelCount(b), 0).toLocaleString('id-ID');
+    if (elSekolah) elSekolah.innerText = rawData.length.toLocaleString('id-ID');
+    if (elSiswa) elSiswa.innerText = rawData.reduce((a, b) => a + getSiswaCount(b), 0).toLocaleString('id-ID');
+    if (elGuru) elGuru.innerText = rawData.reduce((a, b) => a + getGuruCount(b), 0).toLocaleString('id-ID');
+    if (elRombel) elRombel.innerText = rawData.reduce((a, b) => a + getRombelCount(b), 0).toLocaleString('id-ID');
 }
 
 // RENDER TABEL BARU DENGAN ZEBRA STRIPING & ANTI-GESER
@@ -338,7 +355,6 @@ function renderTable() {
 
         return `
             <tr class="${zebraBg} hover:bg-blue-50/50 transition-colors border-b border-slate-100">
-                <!-- Max width & truncate dikunci biar gak bikin struktur tabel geser -->
                 <td class="px-5 py-3.5 font-bold text-slate-800 max-w-[260px] truncate" title="${namaSekolah}">
                     ${namaSekolah}
                 </td>
@@ -368,6 +384,7 @@ function renderTable() {
     }).join('');
 
     updatePaginationUI();
+    if (window.lucide) lucide.createIcons();
 }
 
 function updatePaginationUI() {
@@ -415,12 +432,14 @@ function switchChartTab(tab) {
 function updateCharts() {
     if (typeof Chart === 'undefined') return;
 
-    const ctx = document.getElementById('mainChart')?.getContext('2d');
-    if (!ctx) return;
+    const canvas = document.getElementById('mainChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
-    if (mainChartInstance) {
-        mainChartInstance.destroy();
-    }
+    // Hancurkan instance chart lama untuk menghindari glitched/overlapping render
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) existingChart.destroy();
+    if (mainChartInstance) mainChartInstance.destroy();
 
     const kabupatenMap = {};
     const jenjangSet = new Set();
@@ -589,6 +608,7 @@ function updateCharts() {
     }
 }
 
-// Global Exports
+// Global Scope Exports
 window.switchChartTab = switchChartTab;
 window.applyFilters = applyFilters;
+window.updateCards = updateCards;
