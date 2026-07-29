@@ -404,7 +404,7 @@ function updatePaginationUI() {
 }
 
 // ==========================================
-// 3. LOGIKA GRAFIK (DI-LOCK KE RAW DATA)
+// 3. LOGIKA GRAFIK (HORIZONTAL BAR CHART)
 // ==========================================
 function switchChartTab(tab) {
     currentChartTab = tab;
@@ -460,6 +460,7 @@ function updateCharts() {
         }
     });
 
+    // Urutkan dari jumlah terbanyak (paling atas) ke paling sedikit
     const sortedKabupatenList = Object.keys(kabupatenMap)
         .sort((a, b) => kabupatenMap[b].total - kabupatenMap[a].total);
 
@@ -477,11 +478,12 @@ function updateCharts() {
                     label: 'Total Sekolah',
                     data: totalsData,
                     backgroundColor: '#2563eb',
-                    borderRadius: 8,
-                    maxBarThickness: 48
+                    borderRadius: 6,
+                    maxBarThickness: 28
                 }]
             },
             options: {
+                indexAxis: 'y', // 👈 HORIZONTAL BAR CHART (Teks Lurus)
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
@@ -502,12 +504,12 @@ function updateCharts() {
                 },
                 scales: {
                     x: { 
-                        grid: { display: false }, 
-                        ticks: { font: { size: 11, weight: 'bold' } } 
-                    },
-                    y: { 
                         grid: { color: '#f1f5f9' }, 
                         ticks: { font: { size: 11 } } 
+                    },
+                    y: { 
+                        grid: { display: false }, 
+                        ticks: { font: { size: 12, weight: '600' }, color: '#334155' } 
                     }
                 }
             }
@@ -529,7 +531,8 @@ function updateCharts() {
                 label: bp,
                 data: sortedKabupatenList.map(kab => kabupatenMap[kab].bpCounts[bp] || 0),
                 backgroundColor: bpColor,
-                maxBarThickness: 48
+                borderRadius: 4,
+                maxBarThickness: 28
             };
         });
 
@@ -540,6 +543,7 @@ function updateCharts() {
                 datasets: datasets
             },
             options: {
+                indexAxis: 'y', // 👈 HORIZONTAL STACKED BAR CHART
                 responsive: true,
                 maintainAspectRatio: false,
                 interaction: {
@@ -583,13 +587,13 @@ function updateCharts() {
                 scales: {
                     x: {
                         stacked: true,
-                        grid: { display: false },
-                        ticks: { font: { size: 11, weight: 'bold' } }
+                        grid: { color: '#f1f5f9' },
+                        ticks: { font: { size: 11 } }
                     },
                     y: {
                         stacked: true,
-                        grid: { color: '#f1f5f9' },
-                        ticks: { font: { size: 11 } }
+                        grid: { display: false },
+                        ticks: { font: { size: 12, weight: '600' }, color: '#334155' }
                     }
                 }
             }
