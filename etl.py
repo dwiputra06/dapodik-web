@@ -29,6 +29,29 @@ def get_kabupaten_from_filename(file_name):
         return "Kab. Berau"
     return "Lainnya"
 
+def clean_num(val):
+    """
+    Fungsi pembersih angka.
+    Mengubah format '2.367' (float desimal akibat pemisah ribuan titik) menjadi 2367.
+    """
+    if pd.isna(val) or val is None:
+        return 0
+    s = str(val).strip()
+    
+    # Jika terbaca sebagai float desimal dari Excel (misal: 2.367)
+    if isinstance(val, float):
+        if s.endswith('.0'):
+            s = s[:-2]
+        elif '.' in s:
+            s = s.replace('.', '')
+            
+    # Hapus sisa titik, koma, atau spasi yang tersisa
+    s = s.replace('.', '').replace(',', '').replace(' ', '')
+    try:
+        return int(float(s))
+    except Exception:
+        return 0
+
 def normalize_columns(df):
     """Standardisasi nama kolom utama agar fleksibel terhadap huruf kapital/kecil"""
     if df is None or df.empty:
@@ -128,14 +151,28 @@ def process_excel_files():
         df_master = df_master[clean_cols]
         df_master = df_master.loc[:, ~df_master.columns.duplicated()]
 
-        # Eliminasi duplikasi berdasarkan NPSN, Kecamatan, & Kabupaten
-        df_master = df_master.drop_duplicates(subset=['NPSN', 'Kecamatan', 'Kabupaten'])
-        
-        # Konversi tipe data angka
+        # Clean NPSN (pastikan string/bersih dari spasi)
+        if 'NPSN' in df_master.columns:
+            df_master['NPSN'] = df_master['NPSN'].astype(str).str.strip().str.replace('.0', '', regex=False)
+
+        # Konversi tipe data angka menggunakan pembersih ribuan 'clean_num'
         num_cols = ['PD', 'Rombel', 'Guru', 'Pegawai', 'R. Kelas', 'R. Lab', 'R. Perpus']
         for col in num_cols:
             if col in df_master.columns:
-                df_master[col] = pd.to_numeric(df_master[col], errors='coerce').fillna(0).astype(int)
+                df_master[col] = df_master[col].apply(clean_num)
+
+        # 💡 PENGGABUNGAN CERDAS KAN DATA MULTI-FILE BERDASARKAN NPSN:
+        # Jika sekolah muncul di file Guru dan file PD, ambil angka terbesar untuk masing-masing kolom.
+        agg_rules = {}
+        for col in df_master.columns:
+            if col == 'NPSN':
+                continue
+            if col in num_cols:
+                agg_rules[col] = 'max'  # Ambil nilai angka terbesar (misal: PD 2367 vs 0 -> ambil 2367)
+            else:
+                agg_rules[col] = 'first' # Ambil teks/nama sekolah pertama
+
+        df_master = df_master.groupby('NPSN', as_index=False).agg(agg_rules)
 
         # 💡 KONVERSI TIPE DATETIME / TIMESTAMP KE STRING AGAR SQLITE TIDAK ERROR
         for col in df_master.columns:
@@ -149,7 +186,7 @@ def process_excel_files():
         conn.close()
         
         print("\n" + "="*60)
-        print(f"✅ Selesai! Data tersimpan di database '{DB_NAME}'. Total: {len(df_master)} sekolah.")
+        print(f"✅ Selesai! Data tersimpan di database '{DB_NAME}'. Total: {len(df_master)} sekolah unik.")
         print("="*60)
         print("📊 REKAP JUMLAH SEKOLAH PER KABUPATEN / KOTA:")
         print(df_master['Kabupaten'].value_counts())
