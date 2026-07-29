@@ -486,6 +486,12 @@ function updateCharts() {
                 indexAxis: 'y', // 👈 HORIZONTAL BAR CHART (Teks Lurus)
                 responsive: true,
                 maintainAspectRatio: false,
+                // 🎯 FIX DETEKSI HOVER DENGAN SUMBU Y
+                interaction: {
+                    mode: 'index',
+                    axis: 'y',
+                    intersect: false
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -546,8 +552,10 @@ function updateCharts() {
                 indexAxis: 'y', // 👈 HORIZONTAL STACKED BAR CHART
                 responsive: true,
                 maintainAspectRatio: false,
+                // 🎯 FIX DETEKSI HOVER DENGAN SUMBU Y
                 interaction: {
                     mode: 'index',
+                    axis: 'y',
                     intersect: false
                 },
                 plugins: {
