@@ -62,26 +62,49 @@
 <body id="top" class="min-h-screen text-slate-800 antialiased flex flex-col justify-between">
 
   <div>
-    <!-- Header / Navbar Mini -->
+    <!-- Header / Navbar Mini (Layout Simetris 3 Kolom) -->
     <header class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2 relative z-10">
-      <div class="flex justify-between items-center">
+      <div class="flex items-center justify-between gap-4">
         
-        <!-- Logo + Title Dapodik Analytics -->
-        <div class="flex items-center gap-3 bg-[#f1f6fc]/80 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/60 shadow-sm">
-          <div class="w-9 h-9 flex items-center justify-center flex-shrink-0">
-            <img 
-              src="{{ url_for('static', filename='img/logo-dapodik-BZDG7c6h.png') }}" 
-              alt="Logo Dapodik" 
-              class="w-full h-full object-contain"
-            />
-          </div>
-          <span class="font-extrabold text-[#0b1e36] tracking-tight text-xl">Dapodik Analytics</span>
+        <!-- 1. KIRI: Logo + Title Dapodik Analytics -->
+        <div class="flex-1 flex items-center justify-start">
+          <a href="/" class="flex items-center gap-3 bg-[#f1f6fc]/80 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/60 shadow-sm hover:opacity-90 transition-all">
+            <div class="w-9 h-9 flex items-center justify-center flex-shrink-0">
+              <img 
+                src="{{ url_for('static', filename='img/logo-dapodik-BZDG7c6h.png') }}" 
+                alt="Logo Dapodik" 
+                class="w-full h-full object-contain"
+              />
+            </div>
+            <span class="font-extrabold text-[#0b1e36] tracking-tight text-xl">Dapodik Analytics</span>
+          </a>
+        </div>
+
+        <!-- 2. TENGAH: Tombol Switch Navigasi (Center Presisi) -->
+        <div class="flex-shrink-0">
+          <nav class="flex items-center gap-1.5 bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-white/80 shadow-sm">
+            <!-- Tombol Dashboard -->
+            <a href="/" 
+               class="px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 {% if request.path == '/' %}bg-blue-600 text-white shadow-md shadow-blue-500/20{% else %}text-slate-600 hover:text-slate-900 hover:bg-slate-100/60{% endif %}">
+              <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+              <span>Dashboard</span>
+            </a>
+            
+            <!-- Tombol Komparasi -->
+            <a href="/komparasi" 
+               class="px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 {% if request.path == '/komparasi' %}bg-blue-600 text-white shadow-md shadow-blue-500/20{% else %}text-slate-600 hover:text-slate-900 hover:bg-slate-100/60{% endif %}">
+              <i data-lucide="git-compare" class="w-4 h-4"></i>
+              <span>Komparasi</span>
+            </a>
+          </nav>
         </div>
         
-        <!-- Badge Status Sistem Terhubung -->
-        <div class="bg-[#e6f7ed] text-[#0d8a50] px-4 py-1.5 rounded-full text-xs font-bold border border-[#b8ebd1] flex items-center gap-2 shadow-sm">
-          <i data-lucide="check-circle-2" class="w-4 h-4 text-[#0d8a50]"></i>
-          <span>Sistem Terhubung</span>
+        <!-- 3. KANAN: Badge Status Sistem Terhubung -->
+        <div class="flex-1 flex items-center justify-end">
+          <div class="bg-[#e6f7ed] text-[#0d8a50] px-4 py-1.5 rounded-full text-xs font-bold border border-[#b8ebd1] flex items-center gap-2 shadow-sm">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-[#0d8a50]"></i>
+            <span>Sistem Terhubung</span>
+          </div>
         </div>
 
       </div>
@@ -173,27 +196,24 @@
         </div>
 
         <!-- Kolom 4: Logo Kemendikdasmen SVG -->
-<div class="flex md:justify-end items-start pt-1">
-  <img 
-    src="{{ url_for('static', filename='img/logo-kemendikdasmen-DCWNUmoB.svg') }}" 
-    alt="Logo Kemendikdasmen" 
-    class="h-20 md:h-24 w-auto object-contain"
-  />
-</div>
+        <div class="flex md:justify-end items-start pt-1">
+          <img 
+            src="{{ url_for('static', filename='img/logo-kemendikdasmen-DCWNUmoB.svg') }}" 
+            alt="Logo Kemendikdasmen" 
+            class="h-20 md:h-24 w-auto object-contain"
+          />
+        </div>
 
       </div>
     </div>
 
-    <!-- Bottom Copyright Bar (Kontras Konten Atas) -->
+    <!-- Bottom Copyright Bar -->
     <div class="border-t border-slate-200 bg-slate-100/80 py-3.5 text-center text-xs text-slate-600 font-semibold">
       © 2026 Kemendikdasmen RI · Hak Cipta Dilindungi.
     </div>
   </footer>
 
-  <!-- Load JavaScript -->
-  <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
-  
+  <!-- Init Lucide Icons -->
   <script>
     document.addEventListener("DOMContentLoaded", function() {
       if (window.lucide) {
