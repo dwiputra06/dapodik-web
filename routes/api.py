@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from flask import Blueprint, jsonify, request
 from config import DB_NAME
@@ -62,7 +63,11 @@ def get_dapodik():
 
 @api_bp.route('/sekolah-list', methods=['GET'])
 def get_sekolah_list():
-    """Mengambil daftar seluruh sekolah yang tersedia"""
+    """Mengambil daftar seluruh sekolah yang tersedia, mendukung pencarian via ?q= & ?limit="""
+    q = (request.args.get('q') or '').strip().lower()
+    limit = request.args.get('limit', default=50, type=int) or 50
+    limit = max(1, min(limit, 200))
+
     conn = None
     try:
         conn = get_db_connection()
@@ -90,6 +95,14 @@ def get_sekolah_list():
             sekolah_list = [{'npsn': k, 'nama': v} for k, v in npsn_map.items()]
 
         sekolah_list.sort(key=lambda x: x['nama'])
+
+        if q:
+            sekolah_list = [
+                s for s in sekolah_list
+                if q in s['nama'].lower() or q in s['npsn'].lower()
+            ]
+
+        sekolah_list = sekolah_list[:limit]
         return jsonify(sekolah_list)
 
     except Exception as e:
@@ -100,9 +113,38 @@ def get_sekolah_list():
             conn.close()
 
 
+def _rank_capaian(val):
+    """Konversi capaian kualitatif menjadi angka untuk perbandingan tren (Baik=3, Sedang=2, Kurang=1)"""
+    v = str(val or '').strip().lower()
+    if 'baik' in v:
+        return 3
+    if 'sedang' in v:
+        return 2
+    if 'kurang' in v:
+        return 1
+    return None
+
+
+def _is_numeric_perubahan(val):
+    """Cek apakah nilai perubahan berupa angka (mis. '6,67', '-2,5', '0')"""
+    v = str(val or '').strip()
+    if not v or v == '-':
+        return False
+    return bool(re.fullmatch(r'-?\d[\d.,]*', v))
+
+
+def _parse_persen(val):
+    """Parse nilai perubahan '6,67' atau '-2,5' menjadi float"""
+    s = str(val or '').strip().replace(',', '.').replace(' ', '')
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
 @api_bp.route('/sekolah-trend', methods=['GET'])
 def get_sekolah_trend():
-    """Mengambil data tren & komparasi 2025 vs 2026 per Indikator Rapor Pendidikan"""
+    """Mengambil data tren & komparasi 2025 vs 2026 per Indikator Rapor Pendidikan (data real dari DB)"""
     npsn = request.args.get('npsn')
 
     if not npsn:
@@ -113,139 +155,102 @@ def get_sekolah_trend():
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # 1. Ambil Nama Sekolah
-        npsn_map = get_nama_sekolah_map(cursor)
-        nama_sekolah = npsn_map.get(str(npsn), f"Sekolah ({npsn})")
-
-        # 2. Deteksi Kolom di tabel rapor_komparasi secara Fleksibel
-        cursor.execute("PRAGMA table_info(rapor_komparasi)")
-        rapor_cols = [r['name'].lower() for r in cursor.fetchall()]
-
-        col_kode = next((c for c in rapor_cols if any(k in c for k in ['kode', 'id'])), None)
-        col_nama_ind = next((c for c in rapor_cols if any(k in c for k in ['nama', 'indikator', 'label'])), None)
-        col_capaian = next((c for c in rapor_cols if any(k in c for k in ['capaian', 'kategori', 'predikat', 'status'])), None)
-        col_skor = next((c for c in rapor_cols if any(k in c for k in ['skor', 'nilai', 'val', 'point'])), None)
-
-        seed_val = sum(ord(char) for char in str(npsn)) % 30
-        base_lit = 60 + seed_val
-        base_num = 55 + seed_val
-
-        # 3. Process Seluruh Indikator & Komparasi 2025 vs 2026
-        indikator_list = []
-        if col_nama_ind or col_kode:
-            cursor.execute("SELECT * FROM rapor_komparasi WHERE npsn = ?", (npsn,))
-            rows = cursor.fetchall()
-
-            for idx, r in enumerate(rows):
-                r_dict = dict(r)
-
-                kode = str(r_dict.get(col_kode) or '-').strip() if col_kode else '-'
-                nama_ind = str(r_dict.get(col_nama_ind) or 'Indikator').strip() if col_nama_ind else 'Indikator'
-
-                # Data Terkini (2026)
-                skor_2026 = None
-                if col_skor and r_dict.get(col_skor) is not None:
-                    try:
-                        skor_2026 = float(r_dict[col_skor])
-                    except ValueError:
-                        skor_2026 = None
-
-                capaian_2026 = str(r_dict.get(col_capaian) or '').strip() if col_capaian else ''
-                if not capaian_2026 or capaian_2026 == '-':
-                    if skor_2026 is not None:
-                        capaian_2026 = "Baik" if skor_2026 >= 70 else ("Sedang" if skor_2026 >= 50 else "Kurang")
-                    else:
-                        capaian_2026 = ["Baik", "Sedang", "Baik", "Kurang", "Sedang"][(seed_val + idx) % 5]
-
-                # Perhitungan Komparasi Historis (2025)
-                delta_skor = ((seed_val + idx) % 7) - 2  # variasi perubahan (-2 s/d +4)
-                if skor_2026 is not None:
-                    skor_2025 = round(max(0, min(100, skor_2026 - delta_skor)), 1)
-                else:
-                    skor_2025 = None
-
-                # Penentuan Capaian Tahun 2025
-                if capaian_2026 == "Baik":
-                    capaian_2025 = "Sedang" if delta_skor > 0 else "Baik"
-                elif capaian_2026 == "Sedang":
-                    capaian_2025 = "Kurang" if delta_skor > 0 else ("Baik" if delta_skor < -2 else "Sedang")
-                else:
-                    capaian_2025 = "Kurang"
-
-                # Status Perubahan Tren
-                if delta_skor > 0:
-                    status_tren = "Naik"
-                elif delta_skor < 0:
-                    status_tren = "Turun"
-                else:
-                    status_tren = "Tetap"
-
-                indikator_list.append({
-                    'kode': kode,
-                    'nama': nama_ind,
-                    'val_2025': {'skor': skor_2025, 'capaian': capaian_2025},
-                    'val_2026': {'skor': skor_2026, 'capaian': capaian_2026},
-                    'perubahan': delta_skor,
-                    'status_tren': status_tren
-                })
-
-                # Evaluasi Literasi / Numerasi untuk Grafik Ringkasan
-                ind_text = (kode + " " + nama_ind).lower()
-                if 'literasi' in ind_text or 'a.1' in ind_text:
-                    if skor_2026: base_lit = int(skor_2026)
-                elif 'numerasi' in ind_text or 'a.2' in ind_text:
-                    if skor_2026: base_num = int(skor_2026)
-
-        # 4. Ambil Kabupaten & Jumlah Siswa
-        total_siswa = 150 + (seed_val * 5)
-        kabupaten = "-"
+        # 1. Ambil Metadata Sekolah (real dari tabel sekolah_meta / sekolah)
+        nama_sekolah = f"Sekolah ({npsn})"
+        kabupaten = '-'
+        jenis_sekolah = '-'
+        status_sekolah = '-'
+        kecamatan = '-'
 
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [row['name'] for row in cursor.fetchall()]
-        target_table = 'sekolah_meta' if 'sekolah_meta' in tables else ('sekolah' if 'sekolah' in tables else None)
+        meta_table = 'sekolah_meta' if 'sekolah_meta' in tables else ('sekolah' if 'sekolah' in tables else None)
 
-        if target_table:
-            cursor.execute(f"PRAGMA table_info({target_table})")
-            t_cols = [r['name'].lower() for r in cursor.fetchall()]
-            c_npsn = next((c for c in ['npsn', 'id'] if c in t_cols), None)
+        if meta_table:
+            cursor.execute(f"PRAGMA table_info({meta_table})")
+            m_cols = [r['name'].lower() for r in cursor.fetchall()]
+            c_npsn = next((c for c in ['npsn', 'id'] if c in m_cols), None)
             if c_npsn:
-                cursor.execute(f"SELECT * FROM `{target_table}` WHERE `{c_npsn}` = ? LIMIT 1", (npsn,))
-                meta_row = cursor.fetchone()
-                if meta_row:
-                    m_dict = dict(meta_row)
-                    kabupaten = m_dict.get('kabupaten_kota') or m_dict.get('kabupaten') or m_dict.get('kab_kota') or '-'
-                    total_siswa = m_dict.get('peserta_didik') or m_dict.get('siswa') or m_dict.get('total_siswa') or total_siswa
+                cursor.execute(f"SELECT * FROM `{meta_table}` WHERE `{c_npsn}` = ? LIMIT 1", (npsn,))
+                row = cursor.fetchone()
+                if row:
+                    d = dict(row)
+                    nama_sekolah = (d.get('nama_sekolah') or d.get('nama_satuan_pendidikan') or d.get('sekolah') or d.get('nama') or nama_sekolah)
+                    kabupaten = d.get('kabupaten_kota') or d.get('kabupaten') or d.get('kab_kota') or '-'
+                    jenis_sekolah = d.get('jenis_sekolah') or d.get('bentuk') or '-'
+                    status_sekolah = d.get('status_sekolah') or d.get('status') or '-'
+                    kecamatan = d.get('kecamatan') or '-'
 
-        # 5. Susun Data Tren Grafik 3 Tahun
-        lit_2024 = max(30, min(100, base_lit - 8))
-        lit_2025 = max(30, min(100, base_lit - 3))
-        lit_2026 = max(30, min(100, base_lit))
+        # 3. Indikator Rapor Pendidikan (real dari tabel rapor_komparasi)
+        indikator_list = []
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row['name'] for row in cursor.fetchall()]
+        if 'rapor_komparasi' in tables:
+            cursor.execute("""
+                SELECT kode_indikator, nama_indikator, capaian_2025, perubahan_2025, capaian_2026, perubahan_2026
+                FROM rapor_komparasi
+                WHERE npsn = ?
+                ORDER BY kode_indikator
+            """, (npsn,))
+            for row in cursor.fetchall():
+                capaian_2025 = str(row['capaian_2025'] or '-').strip()
+                capaian_2026 = str(row['capaian_2026'] or '-').strip()
+                perubahan_2025 = str(row['perubahan_2025'] or '-').strip()
+                perubahan_2026 = str(row['perubahan_2026'] or '-').strip()
 
-        num_2024 = max(30, min(100, base_num - 10))
-        num_2025 = max(30, min(100, base_num - 4))
-        num_2026 = max(30, min(100, base_num))
+                # Hanya tampilkan indikator yang punya data angka perubahan (2025 atau 2026)
+                if not (_is_numeric_perubahan(perubahan_2025) or _is_numeric_perubahan(perubahan_2026)):
+                    continue
 
-        trend_data = [
-            {'tahun': '2024', 'literasi': lit_2024, 'numerasi': num_2024, 'siswa': int(total_siswa * 0.90)},
-            {'tahun': '2025', 'literasi': lit_2025, 'numerasi': num_2025, 'siswa': int(total_siswa * 0.95)},
-            {'tahun': '2026', 'literasi': lit_2026, 'numerasi': num_2026, 'siswa': int(total_siswa)}
-        ]
+                rank_25 = _rank_capaian(capaian_2025)
+                rank_26 = _rank_capaian(capaian_2026)
 
-        growth = {
-            'literasi_pct': round(((lit_2026 - lit_2025) / (lit_2025 or 1)) * 100, 1),
-            'numerasi_pct': round(((num_2026 - num_2025) / (num_2025 or 1)) * 100, 1),
-            'siswa_pct': round(((int(total_siswa) - int(total_siswa * 0.95)) / int(total_siswa * 0.95)) * 100, 1)
-        }
+                if rank_25 is not None and rank_26 is not None:
+                    status_tren = 'Naik' if rank_26 > rank_25 else ('Turun' if rank_26 < rank_25 else 'Tetap')
+                elif rank_26 is not None:
+                    status_tren = 'Naik'
+                elif rank_25 is not None:
+                    status_tren = 'Turun'
+                else:
+                    status_tren = 'Tidak Tersedia'
+
+                indikator_list.append({
+                    'kode': str(row['kode_indikator'] or '-').strip(),
+                    'nama': str(row['nama_indikator'] or '').strip(),
+                    'capaian_2025': capaian_2025,
+                    'perubahan_2025': perubahan_2025,
+                    'capaian_2026': capaian_2026,
+                    'perubahan_2026': perubahan_2026,
+                    'status_tren': status_tren
+                })
+
+        # 4. Rata-rata Perubahan 2026 (data real dari indikator yang punya angka)
+        perubahan_vals = [_parse_persen(i['perubahan_2026']) for i in indikator_list]
+        perubahan_vals = [p for p in perubahan_vals if p is not None]
+        avg_perubahan = round(sum(perubahan_vals) / len(perubahan_vals), 2) if perubahan_vals else None
+
+        # 5. Data Grafik: perubahan nilai (%) 2025 vs 2026 per indikator
+        chart_labels = [i['kode'] for i in indikator_list]
+        chart_2025 = [_parse_persen(i['perubahan_2025']) for i in indikator_list]
+        chart_2026 = [_parse_persen(i['perubahan_2026']) for i in indikator_list]
 
         return jsonify({
             'info': {
                 'npsn': str(npsn),
                 'nama_sekolah': str(nama_sekolah),
-                'kabupaten_kota': str(kabupaten)
+                'kabupaten_kota': str(kabupaten),
+                'jenis_sekolah': str(jenis_sekolah),
+                'status_sekolah': str(status_sekolah),
+                'kecamatan': str(kecamatan)
             },
-            'history': trend_data,
-            'growth': growth,
-            'indikator_list': indikator_list
+            'avg_perubahan': avg_perubahan,
+            'indikator_terisi': len(indikator_list),
+            'indikator_list': indikator_list,
+            'chart': {
+                'labels': chart_labels,
+                'capaian_2025': chart_2025,
+                'capaian_2026': chart_2026
+            }
         })
 
     except Exception as e:

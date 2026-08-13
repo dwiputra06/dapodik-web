@@ -2,7 +2,6 @@ document.addEventListener("DOMContentLoaded", function () {
   // -------------------------------------------------------------
   // 1. Inisialisasi Elemen DOM
   // -------------------------------------------------------------
-  const selectSekolah = document.getElementById("select-sekolah");
   const metaNpsn = document.getElementById("meta-npsn");
   const metaWilayah = document.getElementById("meta-wilayah");
 
@@ -52,56 +51,108 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   // -------------------------------------------------------------
-  // 2. Generator Angka Realistis & Variatif
+  // 2. Helper Tampilan Capaian (Data Real dari DB)
   // -------------------------------------------------------------
-  function getOffset(kodeStr) {
-    let hash = 0;
-    for (let i = 0; i < kodeStr.length; i++) {
-      hash = kodeStr.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return (Math.abs(hash) % 75) / 10; // offset variasi 0.0 - 7.4
+  function capaianBadgeHtml(val) {
+    const v = String(val || "-").trim();
+    const vLower = v.toLowerCase();
+    let cls = "bg-slate-100 text-slate-600 border-slate-200";
+    if (vLower.includes("baik")) cls = "bg-emerald-100 text-emerald-700 border-emerald-200";
+    else if (vLower.includes("sedang")) cls = "bg-amber-100 text-amber-700 border-amber-200";
+    else if (vLower.includes("kurang")) cls = "bg-rose-100 text-rose-700 border-rose-200";
+    else if (vLower.includes("tidak tersedia")) cls = "bg-slate-100 text-slate-400 border-slate-200";
+    return `<span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold border ${cls} whitespace-nowrap">${v}</span>`;
   }
 
-  function getScoreAndDelta(item) {
-    const status = item.status_tren || "Stabil";
-    const kodeKey = item.kode || item.nama || "A.1";
-    const offset = getOffset(String(kodeKey));
-
-    function parseVal(valObj, baseDefault) {
-      if (valObj === null || valObj === undefined) return baseDefault + offset;
-      if (typeof valObj === 'number') return valObj;
-      if (typeof valObj === 'string' && !isNaN(parseFloat(valObj))) return parseFloat(valObj);
-      if (typeof valObj === 'object') {
-        if (valObj.skor !== null && valObj.skor !== undefined && !isNaN(parseFloat(valObj.skor))) return parseFloat(valObj.skor);
-        if (valObj.nilai !== null && valObj.nilai !== undefined && !isNaN(parseFloat(valObj.nilai))) return parseFloat(valObj.nilai);
-        if (typeof valObj.capaian === 'string') {
-          const cap = valObj.capaian.toLowerCase();
-          if (cap.includes('baik')) return 78.5 + offset;
-          if (cap.includes('sedang')) return 62.0 + offset;
-          if (cap.includes('kurang')) return 44.0 + offset;
-        }
-      }
-      return baseDefault + offset;
+  function perubahanHtml(val, statusTren) {
+    const v = String(val || "-").trim();
+    const vLower = v.toLowerCase();
+    if (vLower.includes("tidak tersedia") || v === "-") {
+      return `<span class="text-[10px] font-semibold text-slate-400">Tidak tersedia</span>`;
     }
-
-    let s2025 = parseVal(item.val_2025 ?? item.skor_2025, 62.0);
-    let s2026 = parseVal(item.val_2026 ?? item.skor_2026, 62.0);
-
-    // Variasikan nilai akhir berdasarkan tren agar tidak monoton
-    if (status === "Naik") {
-      if (s2026 <= s2025) {
-        s2026 = s2025 + 10.5 + (offset % 5);
-      }
-    } else if (status === "Turun") {
-      if (s2026 >= s2025) {
-        s2026 = Math.max(35.0, s2025 - (11.2 + (offset % 6)));
-      }
+    const trend = String(statusTren || "");
+    let icon, color;
+    if (trend === "Naik") {
+      icon = "arrow-up-right";
+      color = "text-emerald-600";
+    } else if (trend === "Turun") {
+      icon = "arrow-down-right";
+      color = "text-rose-600";
+    } else if (trend === "Tetap") {
+      icon = "minus";
+      color = "text-amber-600";
+    } else if (v.startsWith("-")) {
+      icon = "arrow-down-right";
+      color = "text-rose-600";
     } else {
-      s2026 = s2025;
+      icon = "arrow-up-right";
+      color = "text-emerald-600";
+    }
+    return `<span class="inline-flex items-center gap-1 text-xs font-extrabold ${color}"><i data-lucide="${icon}" class="w-3 h-3"></i> ${v}%</span>`;
+  }
+
+  function trenHtml(status) {
+    const s = String(status || "Tidak Tersedia");
+    if (s === "Naik") {
+      return `<span class="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full"><i data-lucide="trending-up" class="w-3 h-3"></i> Naik</span>`;
+    }
+    if (s === "Turun") {
+      return `<span class="inline-flex items-center gap-1 text-[10px] font-extrabold text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full"><i data-lucide="trending-down" class="w-3 h-3"></i> Turun</span>`;
+    }
+    if (s === "Tetap") {
+      return `<span class="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full"><i data-lucide="minus" class="w-3 h-3"></i> Tetap</span>`;
+    }
+    return `<span class="text-[10px] font-semibold text-slate-400">—</span>`;
+  }
+
+  function setCapaianCard(scoreEl, badgeEl, badgeTextEl, capaian, perubahan, statusTren) {
+    const v = String(capaian || "").toLowerCase();
+    const p = String(perubahan || "-");
+
+    let colorText = "text-slate-800";
+    let cls = "bg-slate-100 text-slate-600 border border-slate-200";
+    if (v.includes("baik")) {
+      cls = "bg-emerald-100 text-emerald-700 border border-emerald-200";
+      colorText = "text-emerald-600";
+    } else if (v.includes("sedang")) {
+      cls = "bg-amber-100 text-amber-700 border border-amber-200";
+      colorText = "text-amber-600";
+    } else if (v.includes("kurang")) {
+      cls = "bg-rose-100 text-rose-700 border border-rose-200";
+      colorText = "text-rose-600";
     }
 
-    const diff = (s2026 - s2025).toFixed(1);
-    return { s2025, s2026, diff, status };
+    if (scoreEl) {
+      scoreEl.innerText = capaian || "Tidak Tersedia";
+      scoreEl.className = "text-3xl font-extrabold " + colorText;
+    }
+    if (!badgeEl || !badgeTextEl) return;
+
+    badgeEl.className = "px-2.5 py-1 rounded-full text-xs font-extrabold flex items-center gap-1 " + cls;
+
+    if (p.includes("tidak tersedia") || p === "-") {
+      badgeTextEl.innerText = "Tidak ada data";
+      return;
+    }
+
+    const trend = String(statusTren || "");
+    let arrow, color;
+    if (trend === "Naik") {
+      arrow = "▲";
+      color = "text-emerald-700";
+    } else if (trend === "Turun") {
+      arrow = "▼";
+      color = "text-rose-700";
+    } else if (trend === "Tetap") {
+      arrow = "●";
+      color = "text-amber-700";
+    } else {
+      arrow = p.startsWith("-") ? "▼" : "▲";
+      color = "text-slate-700";
+    }
+
+    badgeEl.className = "px-2.5 py-1 rounded-full text-xs font-extrabold flex items-center gap-1 " + color + " " + cls;
+    badgeTextEl.innerText = `${arrow} ${p}%`;
   }
 
   // -------------------------------------------------------------
@@ -113,27 +164,23 @@ document.addEventListener("DOMContentLoaded", function () {
   if (canvas) {
     const ctx = canvas.getContext("2d");
     trendChart = new Chart(ctx, {
-      type: "line",
+      type: "bar",
       data: {
-        labels: ["2024", "2025", "2026"],
+        labels: [],
         datasets: [
           {
-            label: "Skor Literasi",
-            data: [0, 0, 0],
-            borderColor: "#2563eb",
-            backgroundColor: "rgba(37, 99, 235, 0.1)",
-            tension: 0.35,
-            fill: true,
-            pointRadius: 6
+            label: "Perubahan 2025 (%)",
+            data: [],
+            backgroundColor: "#94a3b8",
+            borderRadius: 5,
+            maxBarThickness: 22
           },
           {
-            label: "Skor Numerasi",
-            data: [0, 0, 0],
-            borderColor: "#10b981",
-            backgroundColor: "rgba(16, 185, 129, 0.1)",
-            tension: 0.35,
-            fill: true,
-            pointRadius: 6
+            label: "Perubahan 2026 (%)",
+            data: [],
+            backgroundColor: "#2563eb",
+            borderRadius: 5,
+            maxBarThickness: 22
           }
         ]
       },
@@ -141,23 +188,16 @@ document.addEventListener("DOMContentLoaded", function () {
         responsive: true,
         maintainAspectRatio: false,
         plugins: { legend: { position: "top" } },
-        scales: { y: { beginAtZero: true, max: 100 } }
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: (v) => `${v}%`
+            }
+          }
+        }
       }
     });
-  }
-
-  function updateBadge(badgeEl, pctTextEl, percentage) {
-    if (!badgeEl || !pctTextEl) return;
-    if (percentage > 0) {
-      badgeEl.className = "px-2.5 py-1 rounded-full text-xs font-extrabold flex items-center gap-1 bg-emerald-100 text-emerald-700 border border-emerald-200/80";
-      pctTextEl.innerText = `▲ +${percentage}%`;
-    } else if (percentage < 0) {
-      badgeEl.className = "px-2.5 py-1 rounded-full text-xs font-extrabold flex items-center gap-1 bg-rose-100 text-rose-700 border border-rose-200/80";
-      pctTextEl.innerText = `▼ ${percentage}%`;
-    } else {
-      badgeEl.className = "px-2.5 py-1 rounded-full text-xs font-extrabold flex items-center gap-1 bg-slate-100 text-slate-600 border border-slate-200/80";
-      pctTextEl.innerText = `0%`;
-    }
   }
 
   // -------------------------------------------------------------
@@ -174,7 +214,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const status = item.status_tren || "";
       if (status === "Naik") countNaik++;
       else if (status === "Turun") countTurun++;
-      else countStabil++;
+      else if (status === "Tetap") countStabil++;
     });
 
     if (countNaikEl) countNaikEl.innerText = countNaik;
@@ -185,6 +225,11 @@ document.addEventListener("DOMContentLoaded", function () {
       btnToggleText.innerText = showAllIndikator
         ? `Sembunyikan Indikator`
         : `Lihat Semua Indikator (${currentIndikatorData.length})`;
+    }
+
+    // Sembunyikan tombol toggle bila semua indikator sudah tampil
+    if (btnToggle) {
+      btnToggle.classList.toggle("hidden", currentIndikatorData.length <= 7);
     }
 
     if (!tbodyIndikator) return;
@@ -220,26 +265,6 @@ document.addEventListener("DOMContentLoaded", function () {
         namaFix = KAMUS_INDIKATOR[kodeFix] || `Indikator ${kodeFix}`;
       }
 
-      const { s2025, s2026, diff, status } = getScoreAndDelta(item);
-
-      let deltaBadge = "";
-      let trendColor = "#f59e0b";
-      let sparklinePath = "M0,8 L12,7 L24,9 L36,8 L48,8";
-
-      if (status === "Naik" || parseFloat(diff) > 0) {
-        deltaBadge = `<span class="text-emerald-600 font-extrabold flex items-center gap-1">+${Math.abs(diff)} pts <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i></span>`;
-        trendColor = "#10b981";
-        sparklinePath = "M0,12 L12,10 L24,13 L36,6 L48,2";
-      } else if (status === "Turun" || parseFloat(diff) < 0) {
-        deltaBadge = `<span class="text-rose-600 font-extrabold flex items-center gap-1">-${Math.abs(diff)} pts <i data-lucide="arrow-down-right" class="w-3.5 h-3.5"></i></span>`;
-        trendColor = "#f43f5e";
-        sparklinePath = "M0,2 L12,6 L24,4 L36,11 L48,14";
-      } else {
-        deltaBadge = `<span class="text-amber-600 font-extrabold flex items-center gap-1">+0.0 pts <i data-lucide="minus-circle" class="w-3.5 h-3.5"></i></span>`;
-        trendColor = "#f59e0b";
-        sparklinePath = "M0,8 L12,7 L24,9 L36,8 L48,8";
-      }
-
       const rowHtml = `
         <tr class="hover:bg-slate-50/80 transition-all">
           <td class="py-3.5 px-5 font-bold text-slate-800">
@@ -250,15 +275,10 @@ document.addEventListener("DOMContentLoaded", function () {
               <span class="text-slate-800 font-extrabold leading-snug">${namaFix}</span>
             </div>
           </td>
-          <td class="py-3.5 px-5 font-bold text-slate-700">${s2025.toFixed(1)}</td>
-          <td class="py-3.5 px-5 font-black text-slate-900">${s2026.toFixed(1)}</td>
-          <td class="py-3.5 px-5">${deltaBadge}</td>
-          <td class="py-3.5 px-5">
-            <svg class="w-16 h-4 overflow-visible" fill="none">
-              <path d="${sparklinePath}" stroke="${trendColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              <circle cx="48" cy="${status === 'Naik' ? 2 : status === 'Turun' ? 14 : 8}" r="2.5" fill="${trendColor}" />
-            </svg>
-          </td>
+          <td class="py-3.5 px-5">${capaianBadgeHtml(item.capaian_2025)}</td>
+          <td class="py-3.5 px-5">${capaianBadgeHtml(item.capaian_2026)}</td>
+          <td class="py-3.5 px-5">${perubahanHtml(item.perubahan_2026, item.status_tren)}</td>
+          <td class="py-3.5 px-5">${trenHtml(item.status_tren)}</td>
           <td class="py-3.5 px-5 text-right text-slate-300">
             <i data-lucide="chevron-right" class="w-4 h-4 inline-block"></i>
           </td>
@@ -296,30 +316,161 @@ document.addEventListener("DOMContentLoaded", function () {
   window.toggleIndikatorView = handleToggleClick;
 
   // -------------------------------------------------------------
-  // 6. Fetch Data Backend API
+  // 6. Pencarian Sekolah (Search + Autocomplete)
   // -------------------------------------------------------------
-  async function loadSekolahList() {
-    try {
-      const response = await fetch("/api/sekolah-list");
-      if (!response.ok) throw new Error("Gagal mengambil daftar sekolah");
+  const searchInput = document.getElementById("search-sekolah");
+  const searchResults = document.getElementById("search-results");
+  const metaSekolah = document.getElementById("meta-sekolah");
+  const btnClearSearch = document.getElementById("btn-clear-search");
+  const metaKecamatan = document.getElementById("meta-kecamatan");
 
-      const list = await response.json();
-      if (!Array.isArray(list) || list.length === 0) return;
+  let searchResultsData = [];
+  let highlightIndex = -1;
+  let searchDebounce = null;
 
-      selectSekolah.innerHTML = '<option value="" disabled selected>-- Pilih Sekolah --</option>';
+  function debounce(fn, delay) {
+    return function (...args) {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
 
-      list.forEach((item) => {
-        const option = new Option(`${item.nama} (${item.npsn})`, item.npsn);
-        selectSekolah.add(option);
+  function renderSearchResults(list) {
+    searchResultsData = list || [];
+    highlightIndex = -1;
+
+    if (!searchResultsData.length) {
+      searchResults.innerHTML = `
+        <div class="px-4 py-6 text-center text-xs font-medium text-slate-400">
+          Tidak ditemukan sekolah yang cocok.
+        </div>`;
+      searchResults.classList.remove("hidden");
+      return;
+    }
+
+    searchResults.innerHTML = "";
+    searchResultsData.forEach((item, idx) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors " + (idx === 0 ? "bg-blue-50/40" : "hover:bg-blue-50/70");
+      row.innerHTML = `
+        <i data-lucide="school" class="w-4 h-4 text-blue-500 shrink-0"></i>
+        <span class="flex-1 min-w-0">
+          <span class="block text-xs font-extrabold text-slate-800 truncate">${item.nama}</span>
+          <span class="block text-[10px] font-mono font-semibold text-slate-400">NPSN: ${item.npsn}</span>
+        </span>
+        <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-slate-300 shrink-0"></i>
+      `;
+      row.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        selectSekolah(item);
       });
+      searchResults.appendChild(row);
+    });
 
-      selectSekolah.value = list[0].npsn;
-      await fetchSekolahTrend(list[0].npsn);
+    if (typeof lucide !== "undefined") {
+      lucide.createIcons();
+    }
+    searchResults.classList.remove("hidden");
+  }
 
-    } catch (err) {
-      console.error("❌ Error Load Sekolah:", err);
+  function updateHighlight() {
+    const rows = searchResults.querySelectorAll("button");
+    rows.forEach((r, i) => {
+      r.className = "w-full text-left px-4 py-2.5 flex items-center gap-3 transition-colors " +
+        (i === highlightIndex ? "bg-blue-50" : "hover:bg-blue-50/70");
+    });
+    const active = rows[highlightIndex];
+    if (active) {
+      active.scrollIntoView({ block: "nearest" });
     }
   }
+
+  async function searchSekolah(query) {
+    const q = (query || "").trim();
+    if (!q) {
+      searchResults.classList.add("hidden");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/sekolah-list?q=${encodeURIComponent(q)}&limit=50`);
+      if (!res.ok) throw new Error("Gagal mencari sekolah");
+      const list = await res.json();
+      renderSearchResults(list);
+    } catch (err) {
+      console.error("❌ Error Search Sekolah:", err);
+    }
+  }
+
+  function selectSekolah(item) {
+    if (!item) return;
+    searchInput.value = `${item.nama} (${item.npsn})`;
+    if (metaSekolah) metaSekolah.innerText = item.nama;
+    if (btnClearSearch) btnClearSearch.classList.remove("hidden");
+    searchResults.classList.add("hidden");
+    fetchSekolahTrend(item.npsn);
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", debounce(function () {
+      if (btnClearSearch) {
+        btnClearSearch.classList.toggle("hidden", !searchInput.value.trim());
+      }
+      searchSekolah(searchInput.value);
+    }, 300));
+
+    searchInput.addEventListener("keydown", function (e) {
+      if (searchResults.classList.contains("hidden")) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        highlightIndex = Math.min(highlightIndex + 1, searchResultsData.length - 1);
+        updateHighlight();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        highlightIndex = Math.max(highlightIndex - 1, 0);
+        updateHighlight();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const selected = searchResultsData[highlightIndex >= 0 ? highlightIndex : 0];
+        if (selected) selectSekolah(selected);
+      } else if (e.key === "Escape") {
+        searchResults.classList.add("hidden");
+      }
+    });
+
+    document.addEventListener("click", function (e) {
+      if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.classList.add("hidden");
+      }
+    });
+  }
+
+  if (btnClearSearch) {
+    btnClearSearch.addEventListener("click", function () {
+      searchInput.value = "";
+      btnClearSearch.classList.add("hidden");
+      searchResults.classList.add("hidden");
+      searchInput.focus();
+    });
+  }
+
+  // Pilih sekolah pertama saat halaman pertama kali dibuka
+  (async function initFirstSchool() {
+    try {
+      const res = await fetch("/api/sekolah-list?limit=1");
+      if (!res.ok) return;
+      const list = await res.json();
+      if (Array.isArray(list) && list.length) {
+        searchInput.value = `${list[0].nama} (${list[0].npsn})`;
+        if (metaSekolah) metaSekolah.innerText = list[0].nama;
+        if (btnClearSearch) btnClearSearch.classList.remove("hidden");
+        await fetchSekolahTrend(list[0].npsn);
+      }
+    } catch (err) {
+      console.error("❌ Error Init Sekolah:", err);
+    }
+  })();
 
   async function fetchSekolahTrend(npsn) {
     if (!npsn) return;
@@ -330,31 +481,38 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const data = await res.json();
       const info = data.info || {};
-      const history = data.history || [];
-      const growth = data.growth || {};
       const indikatorList = data.indikator_list || [];
+      const chart = data.chart || { labels: [], capaian_2025: [], capaian_2026: [] };
 
       if (metaNpsn) metaNpsn.innerText = `NPSN: ${info.npsn || "-"}`;
       if (metaWilayah) metaWilayah.innerText = `Kabupaten/Kota: ${info.kabupaten_kota || "-"}`;
+      if (metaKecamatan) metaKecamatan.innerText = `Kecamatan: ${info.kecamatan || "-"}`;
 
-      const lastRecord = history[history.length - 1] || {};
+      // Card Literasi (A.1) & Numerasi (A.2) - data real dari DB
+      const litItem = indikatorList.find((i) => String(i.kode).startsWith("A.1")) || {};
+      const numItem = indikatorList.find((i) => String(i.kode).startsWith("A.2")) || {};
 
-      if (valLitScore) valLitScore.innerText = lastRecord.literasi || 0;
-      if (valNumScore) valNumScore.innerText = lastRecord.numerasi || 0;
-      if (valSiswaTotal) valSiswaTotal.innerText = formatNumber(lastRecord.siswa);
+      setCapaianCard(valLitScore, badgeLit, valLitPct, litItem.capaian_2026, litItem.perubahan_2026, litItem.status_tren);
+      setCapaianCard(valNumScore, badgeNum, valNumPct, numItem.capaian_2026, numItem.perubahan_2026, numItem.status_tren);
 
-      updateBadge(badgeLit, valLitPct, growth.literasi_pct);
-      updateBadge(badgeNum, valNumPct, growth.numerasi_pct);
-      updateBadge(badgeSiswa, valSiswaPct, growth.siswa_pct);
+      // Card Rata-rata Perubahan - dihitung dari data real DB
+      if (valSiswaTotal) {
+        if (data.avg_perubahan != null) {
+          const sign = data.avg_perubahan > 0 ? "+" : "";
+          valSiswaTotal.innerText = `${sign}${String(data.avg_perubahan).replace(".", ",")}%`;
+        } else {
+          valSiswaTotal.innerText = "Tidak Tersedia";
+        }
+      }
+      if (badgeSiswa && valSiswaPct) {
+        badgeSiswa.className = "px-2.5 py-1 rounded-full text-xs font-extrabold flex items-center gap-1 bg-slate-100 text-slate-600 border border-slate-200";
+        valSiswaPct.innerText = `Dari ${data.indikator_terisi || 0} indikator`;
+      }
 
       if (trendChart) {
-        trendChart.data.labels = history.map((h) => h.tahun);
-        trendChart.data.datasets[0].label = `Literasi (${info.nama_sekolah || ''})`;
-        trendChart.data.datasets[0].data = history.map((h) => h.literasi);
-
-        trendChart.data.datasets[1].label = `Numerasi (${info.nama_sekolah || ''})`;
-        trendChart.data.datasets[1].data = history.map((h) => h.numerasi);
-
+        trendChart.data.labels = chart.labels || [];
+        trendChart.data.datasets[0].data = chart.capaian_2025 || [];
+        trendChart.data.datasets[1].data = chart.capaian_2026 || [];
         trendChart.update();
       }
 
@@ -364,12 +522,4 @@ document.addEventListener("DOMContentLoaded", function () {
       console.error("❌ Error Fetch Trend:", err);
     }
   }
-
-  if (selectSekolah) {
-    selectSekolah.addEventListener("change", function () {
-      fetchSekolahTrend(this.value);
-    });
-  }
-
-  loadSekolahList();
 });
