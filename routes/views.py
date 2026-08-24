@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, redirect, url_for
 
 # Inisialisasi Blueprint khusus untuk halaman UI (Tampilan)
 views_bp = Blueprint('views', __name__)
@@ -10,5 +10,5 @@ def home():
 
 @views_bp.route('/komparasi')
 def komparasi():
-    """Halaman Analisis Komparasi Data Wilayah"""
-    return render_template('komparasi.html')
+    """Redirect ke Halaman Utama"""
+    return redirect(url_for('views.home'))

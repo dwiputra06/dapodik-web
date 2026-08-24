@@ -68,7 +68,7 @@
         
         <!-- 1. KIRI: Logo + Title Dapodik Analytics -->
         <div class="flex-1 flex items-center justify-start">
-          <a href="/" class="flex items-center gap-3 bg-[#f1f6fc]/80 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-white/60 shadow-sm hover:opacity-90 transition-all">
+          <a href="/" class="flex items-center gap-3 bg-white px-4 py-2.5 rounded-2xl border border-slate-200/80 shadow-md shadow-blue-900/5 hover:border-blue-500/30 transition-all">
             <div class="w-9 h-9 flex items-center justify-center flex-shrink-0">
               <img 
                 src="{{ url_for('static', filename='img/logo-dapodik-BZDG7c6h.png') }}" 
@@ -79,31 +79,12 @@
             <span class="font-extrabold text-[#0b1e36] tracking-tight text-xl">Dapodik Analytics</span>
           </a>
         </div>
-
-        <!-- 2. TENGAH: Tombol Switch Navigasi (Center Presisi) -->
-        <div class="flex-shrink-0">
-          <nav class="flex items-center gap-1.5 bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-white/80 shadow-sm">
-            <!-- Tombol Dashboard -->
-            <a href="/" 
-               class="px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 {% if request.path == '/' %}bg-blue-600 text-white shadow-md shadow-blue-500/20{% else %}text-slate-600 hover:text-slate-900 hover:bg-slate-100/60{% endif %}">
-              <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-              <span>Dashboard</span>
-            </a>
-            
-            <!-- Tombol Komparasi -->
-            <a href="/komparasi" 
-               class="px-4 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 {% if request.path == '/komparasi' %}bg-blue-600 text-white shadow-md shadow-blue-500/20{% else %}text-slate-600 hover:text-slate-900 hover:bg-slate-100/60{% endif %}">
-              <i data-lucide="git-compare" class="w-4 h-4"></i>
-              <span>Komparasi</span>
-            </a>
-          </nav>
-        </div>
         
-        <!-- 3. KANAN: Badge Status Sistem Terhubung -->
+        <!-- 2. KANAN: Badge Status Sistem Terhubung -->
         <div class="flex-1 flex items-center justify-end">
-          <div class="bg-[#e6f7ed] text-[#0d8a50] px-4 py-1.5 rounded-full text-xs font-bold border border-[#b8ebd1] flex items-center gap-2 shadow-sm">
+          <div class="bg-white text-[#0d8a50] px-4 py-2.5 rounded-2xl border border-slate-200/80 flex items-center gap-2 shadow-md shadow-blue-900/5 transition-all">
             <i data-lucide="check-circle-2" class="w-4 h-4 text-[#0d8a50]"></i>
-            <span>Sistem Terhubung</span>
+            <span class="font-bold text-xs">Sistem Terhubung</span>
           </div>
         </div>
 
